@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sos_edi/client/dio.dart';
 import 'package:sos_edi/models/auth/login_model.dart';
+import 'package:sos_edi/service/notification_service.dart';
 
 enum Status {
   Iniciando,
@@ -71,6 +72,14 @@ class LoginController extends GetxController {
     _status.value = Status.Loguear;
   }
 
+  Future<void> cerrarSesion() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    NotificationService().logout();
+    appUsr = null;
+    _status.value = Status.NoAutorizado;
+  }
+
   Future<Map<String, dynamic>> ingresarLogin(String? usr, String? psw) async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -78,7 +87,7 @@ class LoginController extends GetxController {
       var dataRequest = {
         "login": usr,
         "password": psw,
-        "codigoAcceso": "g0TT1FjEQWOcnY=Su0PJvaMSIRt7",
+        "codigoAcceso": "QU09TX0VES==",
         "version": 3,
       };
 
@@ -105,6 +114,7 @@ class LoginController extends GetxController {
           jsonEncode({'usr': usr, 'psw': encodedString, 'id': login.id}),
         );
         appUsr = login;
+        NotificationService().login(login.id.toString());
 
         return {'estado': login.tipoResultado, 'msg': login.mensaje};
       } else if (login.tipoResultado == 2) {

@@ -9,14 +9,16 @@ import 'package:sos_edi/environment.dart';
 import 'package:sos_edi/pages/dashboard.dart';
 import 'package:sos_edi/pages/auth/login_page.dart';
 import 'package:sos_edi/service/localizacion_service.dart';
+import 'package:sos_edi/service/notification_service.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: Enviroment.filename);
   HttpOverrides.global = MyHttpOverrides();
 
   final locationService = LocazacionService();
-
-  // Llamar al método para manejar los permisos
   bool hasPermission = await locationService.handleLocationPermission();
 
   runApp(
@@ -37,6 +39,7 @@ class _EdiState extends State<Edi> {
   @override
   void initState() {
     super.initState();
+    NotificationService().init(navigatorKey);
   }
 
   var obxLoginController = Get.put(LoginController());
@@ -53,6 +56,7 @@ class _EdiState extends State<Edi> {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

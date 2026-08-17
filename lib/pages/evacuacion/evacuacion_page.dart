@@ -1,20 +1,30 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:get/get.dart';
+import 'package:sos_edi/controller/login_controller.dart';
+import 'package:sos_edi/models/sos/alerta_evacuacion_model.dart';
+import 'package:sos_edi/service/emergency_service.dart';
 
-class EvacuacionPage extends StatelessWidget {
+class EvacuacionPage extends StatefulWidget {
   const EvacuacionPage({super.key});
+
+  @override
+  State<EvacuacionPage> createState() => _EvacuacionPageState();
+}
+
+class _EvacuacionPageState extends State<EvacuacionPage> {
+  bool _isActivating = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(
-        0xFFF2F2F7,
-      ), // Color de fondo gris claro, similar a iOS
+      backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
         title: const Text('Tgestiona', style: TextStyle(color: Colors.black)),
         centerTitle: true,
         backgroundColor: Colors.white,
-        elevation: 0.5, // Sombra sutil para la app bar
+        elevation: 0.5,
       ),
       body: Center(
         child: Padding(
@@ -37,28 +47,30 @@ class EvacuacionPage extends StatelessWidget {
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 64),
-              // Botón de activación
               SizedBox(
                 width: double.infinity,
                 height: 60,
                 child: ElevatedButton(
-                  onPressed: () => _showConfirmationDialog(context),
+                  onPressed: _isActivating
+                      ? null
+                      : () => _showConfirmationDialog(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        Colors.red, // Botón rojo para indicar peligro
+                    backgroundColor: Colors.red,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15.0),
                     ),
                     elevation: 5,
                   ),
-                  child: const Text(
-                    'ACTIVAR EVACUACIÓN',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isActivating
+                      ? const CupertinoActivityIndicator(color: Colors.white)
+                      : const Text(
+                          'ACTIVAR EVACUACIÓN',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -68,7 +80,6 @@ class EvacuacionPage extends StatelessWidget {
     );
   }
 
-  // Función para mostrar la ventana de confirmación
   void _showConfirmationDialog(BuildContext context) {
     showCupertinoDialog<void>(
       context: context,
@@ -82,22 +93,107 @@ class EvacuacionPage extends StatelessWidget {
           CupertinoDialogAction(
             child: const Text('Cancelar'),
             onPressed: () {
-              Navigator.of(context).pop(); // Cierra el modal
+              Navigator.of(context).pop();
             },
           ),
           CupertinoDialogAction(
-            isDestructiveAction:
-                true, // Texto en rojo para la acción destructiva
+            isDestructiveAction: true,
             child: const Text('Activar'),
             onPressed: () {
-              // TODO: Agrega la lógica para activar la alarma aquí.
-              // 1. Llama a tu API de .NET.
-              // 2. Envía la ubicación actual (latitud, longitud).
-              // 3. Maneja la respuesta.
-              print('Alarma de evacuación activada.');
-              Navigator.of(context).pop(); // Cierra el modal
-              // Puedes mostrar un mensaje de éxito o navegar a otra pantalla.
+              Navigator.of(context).pop();
+              _activateEvacuation();
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _activateEvacuation() async {
+    setState(() => _isActivating = true);
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showError('Los servicios de ubicación están desactivados.');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showError('El permiso de ubicación fue denegado.');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showError('El permiso de ubicación está bloqueado permanentemente.');
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final data = AlertaEvacuacionModel(
+        idUsuario: Get.find<LoginController>().appUsr?.id.toString() ?? '',
+        tipoAlerta: 'Evacuación',
+        mensajeAlerta: 'Alerta de evacuación activada. ¡Evacúen de inmediato!',
+        latitudActivacion: position.latitude,
+        longitudActivacion: position.longitude,
+        descripcionUbicacionActivacion: 'Ubicación del oficial de seguridad',
+      );
+
+      final service = EmergencyService();
+      final success = await service.activateAlert(data);
+
+      if (!mounted) return;
+
+      if (success) {
+        _showSuccess();
+      } else {
+        _showError('No se pudo activar la alerta. Intenta de nuevo.');
+      }
+    } catch (e) {
+      _showError('Error al obtener la ubicación: $e');
+    } finally {
+      if (mounted) setState(() => _isActivating = false);
+    }
+  }
+
+  void _showSuccess() {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoAlertDialog(
+        title: const Text('Alerta Activada'),
+        content: const Text(
+          'La alerta de evacuación ha sido enviada a todos los colaboradores.',
+        ),
+        actions: <CupertinoDialogAction>[
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('Entendido'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoAlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: <CupertinoDialogAction>[
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),

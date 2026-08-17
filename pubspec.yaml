@@ -47,6 +47,7 @@ dependencies:
   convex_bottom_app_bar: ^1.0.9
   flutter_map: ^8.1.1
   geolocator: ^14.0.2
+  onesignal_flutter: ^5.2.0
 
 dev_dependencies:
   flutter_test:

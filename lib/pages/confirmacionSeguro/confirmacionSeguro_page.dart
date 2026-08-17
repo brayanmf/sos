@@ -1,10 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:get/get.dart';
+import 'package:sos_edi/controller/login_controller.dart';
+import 'package:sos_edi/models/sos/confirmacion_seguridad_model.dart';
 import 'package:sos_edi/pages/layaout/mapa_page.dart';
+import 'package:sos_edi/service/emergency_service.dart';
 
 class ConfirmacionSeguroPage extends StatefulWidget {
-  const ConfirmacionSeguroPage({super.key});
+  final int? alertaEvacuacionId;
+
+  const ConfirmacionSeguroPage({super.key, this.alertaEvacuacionId});
 
   @override
   State<ConfirmacionSeguroPage> createState() =>
@@ -12,14 +18,27 @@ class ConfirmacionSeguroPage extends StatefulWidget {
 }
 
 class _SafetyConfirmationScreenState extends State<ConfirmacionSeguroPage> {
+  final EmergencyService _emergencyService = EmergencyService();
   bool _isLoadingLocation = true;
+  bool _isConfirming = false;
   String _locationText = 'Obteniendo tu ubicación...';
   double? _latitude;
   double? _longitude;
+  int? _alertaId;
+
   @override
   void initState() {
     super.initState();
+    _alertaId = widget.alertaEvacuacionId;
     _getLocation();
+    if (_alertaId == null) _fetchLatestAlertId();
+  }
+
+  Future<void> _fetchLatestAlertId() async {
+    final alerta = await _emergencyService.getLatestAlert();
+    if (mounted && alerta?.id != null) {
+      setState(() => _alertaId = alerta!.id);
+    }
   }
 
   void _getLocation() async {
@@ -30,7 +49,6 @@ class _SafetyConfirmationScreenState extends State<ConfirmacionSeguroPage> {
     if (mounted) {
       setState(() {
         _isLoadingLocation = false;
-
         _latitude = position.latitude;
         _longitude = position.longitude;
         _locationText =
@@ -39,29 +57,67 @@ class _SafetyConfirmationScreenState extends State<ConfirmacionSeguroPage> {
     }
   }
 
-  // Lógica para manejar la confirmación de seguridad
-  void _handleSafetyConfirmation() {
-    // TODO: Agrega la lógica para enviar la confirmación al backend.
-    // 1. Obtener la ubicación real (latitud y longitud).
-    // 2. Llamar a tu API de .NET para registrar la confirmación con el AlertaID.
-    // 3. Manejar la respuesta y mostrar un mensaje de confirmación o error.
-    print('Confirmación de seguridad enviada.');
+  Future<void> _handleSafetyConfirmation() async {
+    if (_latitude == null || _longitude == null) {
+      _showError('No se ha obtenido la ubicación aún.');
+      return;
+    }
 
+    setState(() => _isConfirming = true);
+
+    try {
+      final data = ConfirmacionSeguridadModel(
+        idUsuario: Get.find<LoginController>().appUsr?.id,
+        alertaEvacuacionId: _alertaId,
+        latitud: _latitude,
+        longitud: _longitude,
+        estadoReportado: 'A salvo',
+        comentario: 'Me encuentro en el punto de encuentro externo.',
+      );
+
+      final success = await _emergencyService.confirmSafety(data);
+
+      if (!mounted) return;
+
+      if (success) {
+        showCupertinoDialog<void>(
+          context: context,
+          builder: (BuildContext context) => CupertinoAlertDialog(
+            title: const Text('Confirmación enviada'),
+            content: const Text(
+              'Tu estado y ubicación han sido registrados. Mantente en un lugar seguro.',
+            ),
+            actions: <CupertinoDialogAction>[
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Entendido'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _showError('No se pudo enviar la confirmación. Intenta de nuevo.');
+      }
+    } catch (e) {
+      _showError('Error al enviar la confirmación: $e');
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
     showCupertinoDialog<void>(
       context: context,
       builder: (BuildContext context) => CupertinoAlertDialog(
-        title: const Text('Confirmación enviada'),
-        content: const Text(
-          'Tu estado y ubicación han sido registrados. Mantente en un lugar seguro.',
-        ),
+        title: const Text('Error'),
+        content: Text(message),
         actions: <CupertinoDialogAction>[
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: const Text('Entendido'),
-            onPressed: () {
-              Navigator.of(context).pop(); // Cierra el modal
-              // Puedes navegar a la pantalla principal o mostrar una pantalla de estado.
-            },
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),
@@ -104,7 +160,6 @@ class _SafetyConfirmationScreenState extends State<ConfirmacionSeguroPage> {
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 48),
-              // Indicador de ubicación y botón para ver el mapa
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -169,19 +224,23 @@ class _SafetyConfirmationScreenState extends State<ConfirmacionSeguroPage> {
                 ),
               ),
               const SizedBox(height: 48),
-              // Botón de "Confirmar mi seguridad"
               SizedBox(
                 width: double.infinity,
                 height: 60,
                 child: CupertinoButton.filled(
-                  onPressed: _isLoadingLocation
+                  onPressed: _isLoadingLocation || _isConfirming
                       ? null
                       : _handleSafetyConfirmation,
                   padding: EdgeInsets.zero,
-                  child: const Text(
-                    'Confirmar mi seguridad',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isConfirming
+                      ? const CupertinoActivityIndicator(color: Colors.white)
+                      : const Text(
+                          'Confirmar mi seguridad',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
