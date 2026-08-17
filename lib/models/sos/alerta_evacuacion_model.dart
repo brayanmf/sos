@@ -8,7 +8,8 @@ String alertaEvacuacionModelToJson(AlertaEvacuacionModel data) =>
 
 class AlertaEvacuacionModel {
   int? id;
-  String? idUsuario;
+  int? idUsuario;
+  int? idTipoAlerta;
   String? tipoAlerta;
   String? mensajeAlerta;
   double? latitudActivacion;
@@ -20,6 +21,8 @@ class AlertaEvacuacionModel {
   AlertaEvacuacionModel({
     this.id,
     this.idUsuario,
+    this.idTipoAlerta,
+ 
     this.tipoAlerta,
     this.mensajeAlerta,
     this.latitudActivacion,
@@ -33,6 +36,7 @@ class AlertaEvacuacionModel {
       AlertaEvacuacionModel(
         id: json["id"],
         idUsuario: json["idUsuario"],
+        idTipoAlerta: json["idTipoAlerta"],
         tipoAlerta: json["tipoAlerta"],
         mensajeAlerta: json["mensajeAlerta"],
         latitudActivacion: (json["latitudActivacion"] as num?)?.toDouble(),
@@ -46,6 +50,7 @@ class AlertaEvacuacionModel {
   Map<String, dynamic> toJson() => {
     "id": id,
     "idUsuario": idUsuario,
+    "idTipoAlerta": idTipoAlerta,
     "tipoAlerta": tipoAlerta,
     "mensajeAlerta": mensajeAlerta,
     "latitudActivacion": latitudActivacion,

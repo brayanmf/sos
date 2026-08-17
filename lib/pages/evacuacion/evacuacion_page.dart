@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:sos_edi/controller/login_controller.dart';
 import 'package:sos_edi/models/sos/alerta_evacuacion_model.dart';
+import 'package:sos_edi/models/sos/tipos_alerta_mode.dart';
 import 'package:sos_edi/service/emergency_service.dart';
 
 class EvacuacionPage extends StatefulWidget {
@@ -14,7 +15,17 @@ class EvacuacionPage extends StatefulWidget {
 }
 
 class _EvacuacionPageState extends State<EvacuacionPage> {
+  static final List<TipoAlerta> tiposAlerta = [
+    { "id": 1, "nombre": "SOS / Emergencia General" },
+    { "id": 2, "nombre": "Incendio" },
+    { "id": 3, "nombre": "Sismo / Terremoto" },
+    { "id": 4, "nombre": "Inundación" },
+    { "id": 5, "nombre": "Médica" },
+    { "id": 6, "nombre": "Seguridad / Intrusión" }
+  ].map((json) => TipoAlerta.fromJson(json)).toList();
+
   bool _isActivating = false;
+  TipoAlerta? _tipoAlertaSeleccionada;
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +57,45 @@ class _EvacuacionPageState extends State<EvacuacionPage> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
-              const SizedBox(height: 64),
+              const SizedBox(height: 32),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<TipoAlerta>(
+                    isExpanded: true,
+                    value: _tipoAlertaSeleccionada,
+                    hint: const Text(
+                      'Selecciona tipo de alerta',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.red),
+                    items: tiposAlerta.map((tipo) {
+                      return DropdownMenuItem<TipoAlerta>(
+                        value: tipo,
+                        child: Text(
+                          tipo.nombre,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (TipoAlerta? valor) {
+                      setState(() => _tipoAlertaSeleccionada = valor);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 height: 60,
                 child: ElevatedButton(
-                  onPressed: _isActivating
+                  onPressed: (_isActivating || _tipoAlertaSeleccionada == null)
                       ? null
                       : () => _showConfirmationDialog(context),
                   style: ElevatedButton.styleFrom(
@@ -81,11 +125,13 @@ class _EvacuacionPageState extends State<EvacuacionPage> {
   }
 
   void _showConfirmationDialog(BuildContext context) {
+    final nombreAlerta = _tipoAlertaSeleccionada?.nombre ?? 'No seleccionada';
     showCupertinoDialog<void>(
       context: context,
       builder: (BuildContext context) => CupertinoAlertDialog(
         title: const Text('Confirmar Activación'),
-        content: const Text(
+        content: Text(
+          'Tipo de alerta: $nombreAlerta\n\n'
           '¿Estás seguro de que quieres activar la alarma de evacuación? '
           'Esta acción alertará a todos los colaboradores de forma inmediata.',
         ),
@@ -138,8 +184,9 @@ class _EvacuacionPageState extends State<EvacuacionPage> {
       );
 
       final data = AlertaEvacuacionModel(
-        idUsuario: Get.find<LoginController>().appUsr?.id.toString() ?? '',
-        tipoAlerta: 'Evacuación',
+        id:0,
+        idUsuario: Get.find<LoginController>().appUsr?.id ,
+        idTipoAlerta: _tipoAlertaSeleccionada?.id ?? 1,
         mensajeAlerta: 'Alerta de evacuación activada. ¡Evacúen de inmediato!',
         latitudActivacion: position.latitude,
         longitudActivacion: position.longitude,
